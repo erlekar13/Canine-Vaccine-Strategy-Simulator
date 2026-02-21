@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title> Canine Vaccine Strategy Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700&display=swap');
+
+  :root {
+    --bg:       #0d1117;
+    --panel:    #161b22;
+    --border:   #30363d;
+    --healthy:  #2ecc71;
+    --infected: #e74c3c;
+    --vacc:     #3498db;
+    --accent:   #f39c12;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --glow-g:   0 0 12px #2ecc7188;
+    --glow-r:   0 0 12px #e74c3c88;
+    --glow-b:   0 0 12px #3498db88;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .topbar .meta {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .topbar .spacer { flex: 1; }
+  .badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+  }
+
+  /* ── MAIN GRID ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    grid-template-rows: auto auto;
+    gap: 14px;
+    padding: 14px 18px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .card-title {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── GRAPH CANVAS ── */
+  #graphCanvas {
+    display: block;
+    width: 100%;
+    border-radius: 6px;
+    cursor: crosshair;
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .strat-btn {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: 1.5px solid;
+    background: transparent;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .strat-btn:hover, .strat-btn.active {
+    filter: brightness(1.3);
+    box-shadow: 0 0 16px currentColor;
+  }
+  .strat-btn.random   { color: var(--healthy);  border-color: var(--healthy); }
+  .strat-btn.highdeg  { color: var(--vacc);     border-color: var(--vacc); }
+  .strat-btn.highrisk { color: var(--accent);   border-color: var(--accent); }
+  .strat-btn.active.random   { background: #2ecc7122; }
+  .strat-btn.active.highdeg  { background: #3498db22; }
+  .strat-btn.active.highrisk { background: #f39c1222; }
+
+  .run-btn {
+    padding: 8px 22px;
+    border-radius: 6px;
+    border: none;
+    background: var(--healthy);
+    color: #0d1117;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .run-btn:hover { filter: brightness(1.15); box-shadow: var(--glow-g); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .reset-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { background: var(--border); }
+
+  .spacer { flex: 1; }
+
+  .progress-bar-wrap {
+    width: 180px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--healthy);
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  #statusMsg {
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 240px;
+  }
+
+  /* ── STAT CARDS ── */
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .stat-card {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .stat-card .val {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .stat-card .lbl {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  /* ── CHARTS ── */
+  #barCanvas, #lineCanvas { display: block; width: 100%; border-radius: 6px; }
+
+  /* ── RESULT TABLE ── */
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-top: 8px;
+  }
+  .result-table th {
+    color: var(--muted);
+    text-align: left;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-weight: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .result-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  .result-table tr:last-child td { border-bottom: none; }
+  .result-table .best td { color: var(--healthy); }
+
+  /* ── TOOLTIP ── */
+  #tooltip {
+    position: fixed;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 11px;
+    pointer-events: none;
+    display: none;
+    z-index: 999;
+    line-height: 1.8;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.04) 3px,
+      rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <h1>🐕 CANINE VACCINE STRATEGY SIMULATOR</h1>
+  <div class="meta">
+    Dogs: <b id="paramDogs">100</b> &nbsp;|&nbsp;
+    Init Infected: <b id="paramInf">5</b> &nbsp;|&nbsp;
+    Vaccines: <b id="paramVacc">30</b> &nbsp;|&nbsp;
+    Runs: <b>10</b> &nbsp;|&nbsp;
+    Infection Prob: <b>40%</b>
+  </div>
+  <div class="spacer"></div>
+  <span class="badge" id="stratBadge" style="background:#2ecc7122;color:#2ecc71;border:1px solid #2ecc71">
+    Strategy: Random
+  </span>
+</div>
+
+<!-- CONTROLS -->
+<div class="main">
+  <div class="controls card">
+    <button class="strat-btn random active"   onclick="selectStrategy('Random',   this)">Random</button>
+    <button class="strat-btn highdeg"          onclick="selectStrategy('HighDegree',this)">High Degree</button>
+    <button class="strat-btn highrisk"         onclick="selectStrategy('HighRiskArea',this)">High Risk Area</button>
+    <button class="run-btn" id="runBtn"        onclick="runAnimation()">▶ Run Simulation</button>
+    <button class="reset-btn"                  onclick="resetSim()">↺ Reset</button>
+    <div class="spacer"></div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <span id="statusMsg">Select a strategy and click Run Simulation</span>
+  </div>
+
+  <!-- GRAPH -->
+  <div class="card" style="grid-row: 2">
+    <div class="card-title">Dog Contact Network — Scale-Free Graph (Barabási–Albert)</div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--healthy)"></div>Healthy</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--infected)"></div>Infected</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vacc)"></div>Vaccinated</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#666;border:1px dashed #aaa"></div>Hub Node (high degree)</div>
+    </div>
+    <canvas id="graphCanvas" width="700" height="480"></canvas>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+
+    <!-- STAT CARDS -->
+    <div class="card">
+      <div class="card-title">Current Run Stats</div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="val" id="statHealthy" style="color:var(--healthy)">–</div>
+          <div class="lbl">Healthy</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="statInfected" style="color:var(--infected)">–</div>
+          <div class="lbl">Infected</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="statVacc" style="color:var(--vacc)">–</div>
+          <div class="lbl">Vaccinated</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="statRate" style="color:var(--accent)">–</div>
+          <div class="lbl">Inf Rate</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BAR CHART -->
+    <div class="card">
+      <div class="card-title">Avg Final Infected — Strategy Comparison</div>
+      <canvas id="barCanvas" width="390" height="190"></canvas>
+    </div>
+
+    <!-- LINE CHART -->
+    <div class="card">
+      <div class="card-title">Infection per Run — All Strategies</div>
+      <canvas id="lineCanvas" width="390" height="175"></canvas>
+    </div>
+
+    <!-- RESULT TABLE -->
+    <div class="card">
+      <div class="card-title">Summary Table</div>
+      <table class="result-table" id="resultTable">
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Avg Infected</th>
+            <th>Inf Rate</th>
+            <th>Reduction</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+
+  </div><!-- end right panel -->
+</div><!-- end main -->
+
+<script>
+// ════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════
+const N        = 100;
+const EDGES_K  = 3;
+const INIT_INF = 5;
+const VACCINES = 30;
+const RUNS     = 10;
+const INF_PROB = 0.40;
+
+const C_BG      = '#0d1117';
+const C_PANEL   = '#161b22';
+const C_HEALTHY = '#2ecc71';
+const C_INF     = '#e74c3c';
+const C_VACC    = '#3498db';
+const C_ACCENT  = '#f39c12';
+const C_EDGE    = 'rgba(255,255,255,0.06)';
+const C_TEXT    = '#e6edf3';
+const C_MUTED   = '#8b949e';
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let dogs = [], edges = [], nodeX = [], nodeY = [];
+let currentStrategy = 'Random';
+let avgResults    = {Random:[],HighDegree:[],HighRiskArea:[]};
+let perRunResults = {Random:[],HighDegree:[],HighRiskArea:[]};
+let animating     = false;
+
+// ════════════════════════════════════════════════════
+//  GRAPH CONSTRUCTION (Barabási–Albert)
+// ════════════════════════════════════════════════════
+function buildGraph() {
+  dogs = []; edges = []; nodeX = []; nodeY = [];
+  for (let i = 0; i < N; i++) {
+    dogs.push({ id:i, infected:false, vaccinated:false, neighbors:[] });
+  }
+
+  let pool = [0,1];
+  addEdge(0,1);
+
+  for (let newId = 2; newId < N; newId++) {
+    let chosen = new Set();
+    let attempts = 0;
+    while (chosen.size < EDGES_K && attempts < pool.length * 3) {
+      let pick = pool[Math.floor(Math.random()*pool.length)];
+      if (pick !== newId && !chosen.has(pick)) {
+        chosen.add(pick);
+        addEdge(newId, pick);
+        pool.push(newId); pool.push(pick);
+      }
+      attempts++;
+    }
+  }
+
+  layoutGraph();
+}
+
+function addEdge(a, b) {
+  edges.push([a,b]);
+  dogs[a].neighbors.push(b);
+  dogs[b].neighbors.push(a);
+}
+
+function layoutGraph() {
+  const gc  = document.getElementById('graphCanvas');
+  const cx  = gc.width / 2, cy = gc.height / 2;
+  const r   = Math.min(cx, cy) * 0.78;
+
+  for (let i = 0; i < N; i++) {
+    const angle = (2 * Math.PI * i / N) + (Math.random()-0.5)*0.15;
+    const dist  = r * (0.7 + Math.random()*0.3);
+    nodeX[i] = cx + dist * Math.cos(angle);
+    nodeY[i] = cy + dist * Math.sin(angle);
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  RESET
+// ════════════════════════════════════════════════════
+function resetDogs() {
+  dogs.forEach(d => { d.infected = false; d.vaccinated = false; });
+}
+
+function infectRandom(count) {
+  let all = [...Array(N).keys()];
+  shuffle(all);
+  for (let i = 0; i < count; i++) dogs[all[i]].infected = true;
+}
+
+// ════════════════════════════════════════════════════
+//  VACCINATION STRATEGIES
+// ════════════════════════════════════════════════════
+function applyStrategy(strategy) {
+  let all = [...Array(N).keys()];
+
+  if (strategy === 'Random') {
+    shuffle(all);
+    for (let i = 0; i < VACCINES; i++) dogs[all[i]].vaccinated = true;
+
+  } else if (strategy === 'HighDegree') {
+    all.sort((a,b) => dogs[b].neighbors.length - dogs[a].neighbors.length);
+    for (let i = 0; i < VACCINES; i++) dogs[all[i]].vaccinated = true;
+
+  } else if (strategy === 'HighRiskArea') {
+    let targets = new Set();
+    dogs.forEach(d => { if (d.infected) d.neighbors.forEach(nb => targets.add(nb)); });
+    let tArr = [...targets];
+    shuffle(tArr);
+    let i = 0;
+    for (; i < VACCINES && i < tArr.length; i++) dogs[tArr[i]].vaccinated = true;
+    if (i < VACCINES) {
+      let rest = all.filter(x => !targets.has(x));
+      shuffle(rest);
+      for (let j = 0; i < VACCINES && j < rest.length; i++, j++)
+        dogs[rest[j]].vaccinated = true;
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  SIMULATE SPREAD
+// ════════════════════════════════════════════════════
+function simulateSpread() {
+  let queue = [];
+  dogs.forEach(d => { if (d.infected) queue.push(d.id); });
+  while (queue.length) {
+    let cur = queue.shift();
+    dogs[cur].neighbors.forEach(nb => {
+      if (!dogs[nb].infected && !dogs[nb].vaccinated && Math.random() < INF_PROB) {
+        dogs[nb].infected = true;
+        queue.push(nb);
+      }
+    });
+  }
+}
+
+// BFS waves for animation
+function getWaves() {
+  let queue = [], visited = new Array(N).fill(false), waves = [];
+  dogs.forEach(d => { if (d.infected) { queue.push(d.id); visited[d.id] = true; }});
+
+  while (queue.length) {
+    let wave = [], nextQueue = [];
+    queue.forEach(cur => {
+      dogs[cur].neighbors.forEach(nb => {
+        if (!visited[nb] && !dogs[nb].vaccinated && Math.random() < INF_PROB) {
+          visited[nb] = true;
+          wave.push(nb);
+          nextQueue.push(nb);
+        }
+      });
+    });
+    if (wave.length) waves.push(wave);
+    queue = nextQueue;
+  }
+  return waves;
+}
+
+// ════════════════════════════════════════════════════
+//  PRECOMPUTE ALL STRATEGY RESULTS
+// ════════════════════════════════════════════════════
+function precompute() {
+  ['Random','HighDegree','HighRiskArea'].forEach(strat => {
+    let sumFinal = 0;
+    let runs     = [];
+    for (let r = 0; r < RUNS; r++) {
+      resetDogs();
+      infectRandom(INIT_INF);
+      applyStrategy(strat);
+      simulateSpread();
+      let inf = dogs.filter(d=>d.infected).length;
+      sumFinal += inf;
+      runs.push(inf);
+    }
+    avgResults[strat]    = sumFinal / RUNS;
+    perRunResults[strat] = runs;
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  DRAW GRAPH
+// ════════════════════════════════════════════════════
+function drawGraph() {
+  const canvas = document.getElementById('graphCanvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = C_PANEL;
+  ctx.fillRect(0,0,W,H);
+
+  // Edges
+  ctx.strokeStyle = C_EDGE;
+  ctx.lineWidth   = 0.7;
+  edges.forEach(([a,b]) => {
+    ctx.beginPath();
+    ctx.moveTo(nodeX[a], nodeY[a]);
+    ctx.lineTo(nodeX[b], nodeY[b]);
+    ctx.stroke();
+  });
+
+  // Nodes
+  dogs.forEach((d,i) => {
+    const deg  = d.neighbors.length;
+    const col  = d.vaccinated ? C_VACC : d.infected ? C_INF : C_HEALTHY;
+    const size = 4 + Math.min(deg*0.55, 9);
+
+    // Hub glow
+    if (deg > 8) {
+      ctx.beginPath();
+      const grad = ctx.createRadialGradient(nodeX[i],nodeY[i],0, nodeX[i],nodeY[i],size*3);
+      grad.addColorStop(0, col+'44');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.arc(nodeX[i], nodeY[i], size*3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(nodeX[i], nodeY[i], size, 0, Math.PI*2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.strokeStyle = col+'99';
+    ctx.lineWidth   = 0.5;
+    ctx.stroke();
+  });
+
+  // Stats overlay
+  const inf  = dogs.filter(d=>d.infected).length;
+  const vacc = dogs.filter(d=>d.vaccinated).length;
+  const safe = N - inf - vacc;
+
+  ctx.fillStyle = 'rgba(13,17,23,0.82)';
+  roundRect(ctx, 10, 10, 180, 86, 8);
+  ctx.fill();
+
+  ctx.font = 'bold 11px "Share Tech Mono"';
+  drawStatText(ctx, 28, '● Healthy:    ' + safe, C_HEALTHY);
+  drawStatText(ctx, 46, '● Infected:   ' + inf,  C_INF);
+  drawStatText(ctx, 64, '● Vaccinated: ' + vacc, C_VACC);
+  ctx.font = '10px "Share Tech Mono"';
+  ctx.fillStyle = C_MUTED;
+  ctx.fillText('Inf Rate: ' + (inf/N*100).toFixed(1) + '%', 20, 82);
+
+  // Update stat cards
+  document.getElementById('statHealthy').textContent = safe;
+  document.getElementById('statInfected').textContent = inf;
+  document.getElementById('statVacc').textContent = vacc;
+  document.getElementById('statRate').textContent = (inf/N*100).toFixed(1)+'%';
+}
+
+function drawStatText(ctx, y, text, color) {
+  ctx.fillStyle = color;
+  ctx.fillText(text, 18, y);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r, y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x, y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// ════════════════════════════════════════════════════
+//  BAR CHART
+// ════════════════════════════════════════════════════
+function drawBarChart() {
+  const canvas = document.getElementById('barCanvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const padL=44, padB=28, padT=14, padR=12;
+  const chartW = W-padL-padR, chartH = H-padB-padT;
+
+  ctx.fillStyle = C_PANEL;
+  ctx.fillRect(0,0,W,H);
+
+  const strats = ['Random','HighDegree','HighRiskArea'];
+  const cols   = [C_HEALTHY, C_VACC, C_ACCENT];
+  const labels = ['Random','HiDeg','HiRisk'];
+  const barW   = chartW/3 - 16;
+  const maxVal = N;
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth   = 1;
+  for (let g=0; g<=4; g++) {
+    let y = padT + chartH*(1 - g/4);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+chartW,y); ctx.stroke();
+    ctx.fillStyle = C_MUTED;
+    ctx.font = '9px "Share Tech Mono"';
+    ctx.fillText(Math.round(g/4*maxVal), 2, y+4);
+  }
+
+  strats.forEach((s,i) => {
+    const val  = avgResults[s];
+    const barH = (val/maxVal)*chartH;
+    const x    = padL + i*(chartW/3) + 8;
+    const y    = padT + chartH - barH;
+    const col  = cols[i];
+
+    // bg track
+    ctx.fillStyle = col+'22';
+    ctx.fillRect(x, padT, barW, chartH);
+
+    // bar
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y, barW, barH);
+
+    // highlight top
+    ctx.fillStyle = col+'99';
+    ctx.fillRect(x, y, barW, 3);
+
+    // value
+    ctx.fillStyle = C_TEXT;
+    ctx.font = 'bold 12px "Share Tech Mono"';
+    ctx.fillText(val.toFixed(1), x + barW/2 - 14, y - 5);
+
+    // label
+    ctx.fillStyle = col;
+    ctx.font = '10px "Share Tech Mono"';
+    ctx.fillText(labels[i], x + barW/2 - 14, H-6);
+  });
+
+  // Y axis label
+  ctx.save();
+  ctx.translate(11, H/2+20);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillStyle = C_MUTED;
+  ctx.font = '9px "Share Tech Mono"';
+  ctx.fillText('Avg Infected', 0, 0);
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════════════
+//  LINE CHART
+// ════════════════════════════════════════════════════
+function drawLineChart() {
+  const canvas = document.getElementById('lineCanvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const padL=40, padB=26, padT=22, padR=12;
+  const chartW = W-padL-padR, chartH = H-padB-padT;
+
+  ctx.fillStyle = C_PANEL;
+  ctx.fillRect(0,0,W,H);
+
+  const strats = ['Random','HighDegree','HighRiskArea'];
+  const cols   = [C_HEALTHY, C_VACC, C_ACCENT];
+  const labels = ['Random','HiDeg','HiRisk'];
+
+  let maxVal = 0;
+  strats.forEach(s => perRunResults[s].forEach(v => maxVal = Math.max(maxVal, v)));
+  if (!maxVal) maxVal = 1;
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth   = 1;
+  for (let g=0; g<=4; g++) {
+    let y = padT + chartH*(1-g/4);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+chartW,y); ctx.stroke();
+    ctx.fillStyle = C_MUTED;
+    ctx.font = '9px "Share Tech Mono"';
+    ctx.fillText(Math.round(g/4*maxVal), 2, y+4);
+  }
+
+  // Lines
+  strats.forEach((s,si) => {
+    const data = perRunResults[s];
+    const col  = cols[si];
+
+    // Area fill
+    ctx.beginPath();
+    data.forEach((v,r) => {
+      const x = padL + (r/(RUNS-1))*chartW;
+      const y = padT + chartH - (v/maxVal)*chartH;
+      r===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.lineTo(padL+chartW, padT+chartH);
+    ctx.lineTo(padL, padT+chartH);
+    ctx.closePath();
+    ctx.fillStyle = col+'18';
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 2;
+    data.forEach((v,r) => {
+      const x = padL + (r/(RUNS-1))*chartW;
+      const y = padT + chartH - (v/maxVal)*chartH;
+      r===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    // Dots
+    ctx.fillStyle = col;
+    data.forEach((v,r) => {
+      const x = padL + (r/(RUNS-1))*chartW;
+      const y = padT + chartH - (v/maxVal)*chartH;
+      ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+    });
+  });
+
+  // X labels
+  ctx.fillStyle = C_MUTED;
+  ctx.font = '9px "Share Tech Mono"';
+  for (let r=0; r<RUNS; r++) {
+    ctx.fillText(r+1, padL+(r/(RUNS-1))*chartW-3, H-6);
+  }
+
+  // Legend (top)
+  strats.forEach((s,i) => {
+    ctx.fillStyle = cols[i];
+    ctx.fillRect(padL + i*105, 4, 10, 7);
+    ctx.font = '9px "Share Tech Mono"';
+    ctx.fillText(labels[i], padL+i*105+14, 11);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  RESULT TABLE
+// ════════════════════════════════════════════════════
+function updateTable() {
+  const strats  = ['Random','HighDegree','HighRiskArea'];
+  const baseline= avgResults['Random'];
+  const body    = document.getElementById('resultBody');
+  body.innerHTML = '';
+
+  let bestIdx = 0;
+  strats.forEach((s,i) => {
+    if (avgResults[s] < avgResults[strats[bestIdx]]) bestIdx = i;
+  });
+
+  strats.forEach((s,i) => {
+    const val  = avgResults[s];
+    const rate = (val/N*100).toFixed(1);
+    const red  = i===0 ? '—' : ((baseline-val)/baseline*100).toFixed(1)+'%';
+    const tr   = document.createElement('tr');
+    if (i === bestIdx) tr.className = 'best';
+    tr.innerHTML = `
+      <td>${i===bestIdx?'🏆 ':''}${s}</td>
+      <td>${val.toFixed(1)}</td>
+      <td>${rate}%</td>
+      <td style="color:${i===0?C_MUTED:C_HEALTHY}">${red}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+// ════════════════════════════════════════════════════
+//  ANIMATION
+// ════════════════════════════════════════════════════
+function runAnimation() {
+  if (animating) return;
+  animating = true;
+
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  document.getElementById('statusMsg').textContent = 'Simulating: ' + currentStrategy + '...';
+
+  resetDogs();
+  infectRandom(INIT_INF);
+  applyStrategy(currentStrategy);
+
+  // Save initial infected ids for animation reset
+  const initInfected = dogs.filter(d=>d.infected).map(d=>d.id);
+  const waves = getWaves();
+
+  // Reset to only initial infected
+  resetDogs();
+  initInfected.forEach(id => dogs[id].infected = true);
+  applyStrategy(currentStrategy);
+  drawGraph();
+
+  let waveIdx = 0;
+  const total = waves.length || 1;
+
+  function nextWave() {
+    if (waveIdx >= waves.length) {
+      animating = false;
+      runBtn.disabled = false;
+      const inf = dogs.filter(d=>d.infected).length;
+      document.getElementById('statusMsg').textContent =
+        `Done! ${inf} infected (${(inf/N*100).toFixed(1)}%) — ${currentStrategy}`;
+      document.getElementById('progressFill').style.width = '100%';
+      return;
+    }
+    waves[waveIdx].forEach(id => { dogs[id].infected = true; });
+    drawGraph();
+    document.getElementById('progressFill').style.width = ((waveIdx+1)/total*100)+'%';
+    waveIdx++;
+    setTimeout(nextWave, 280);
+  }
+  nextWave();
+}
+
+// ════════════════════════════════════════════════════
+//  UI CONTROLS
+// ════════════════════════════════════════════════════
+function selectStrategy(s, btn) {
+  currentStrategy = s;
+  document.querySelectorAll('.strat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const colors = {Random:'#2ecc71', HighDegree:'#3498db', HighRiskArea:'#f39c12'};
+  const badge  = document.getElementById('stratBadge');
+  badge.textContent = 'Strategy: ' + s;
+  badge.style.color        = colors[s];
+  badge.style.borderColor  = colors[s];
+  badge.style.background   = colors[s]+'22';
+
+  resetDogs();
+  infectRandom(INIT_INF);
+  applyStrategy(s);
+  simulateSpread();
+  drawGraph();
+}
+
+function resetSim() {
+  buildGraph();
+  precompute();
+  resetDogs();
+  infectRandom(INIT_INF);
+  applyStrategy(currentStrategy);
+  simulateSpread();
+  drawGraph();
+  drawBarChart();
+  drawLineChart();
+  updateTable();
+  document.getElementById('statusMsg').textContent = 'Graph rebuilt with new random seed';
+  document.getElementById('progressFill').style.width = '0%';
+}
+
+// ════════════════════════════════════════════════════
+//  TOOLTIP ON HOVER
+// ════════════════════════════════════════════════════
+document.getElementById('graphCanvas').addEventListener('mousemove', function(e) {
+  const rect = this.getBoundingClientRect();
+  const mx   = (e.clientX - rect.left) * (this.width / rect.width);
+  const my   = (e.clientY - rect.top)  * (this.height / rect.height);
+  const tip  = document.getElementById('tooltip');
+
+  let found = false;
+  for (let i = 0; i < N; i++) {
+    const dx = mx - nodeX[i], dy = my - nodeY[i];
+    if (Math.sqrt(dx*dx+dy*dy) < 12) {
+      const d = dogs[i];
+      const status = d.vaccinated ? '💉 Vaccinated' : d.infected ? '🔴 Infected' : '🟢 Healthy';
+      tip.innerHTML = `Dog #${d.id}<br>Status: ${status}<br>Contacts: ${d.neighbors.length}`;
+      tip.style.display = 'block';
+      tip.style.left    = (e.clientX + 14) + 'px';
+      tip.style.top     = (e.clientY - 10) + 'px';
+      found = true;
+      break;
+    }
+  }
+  if (!found) tip.style.display = 'none';
+});
+
+document.getElementById('graphCanvas').addEventListener('mouseleave', () => {
+  document.getElementById('tooltip').style.display = 'none';
+});
+
+// ════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════
+function shuffle(arr) {
+  for (let i=arr.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════
+buildGraph();
+precompute();
+infectRandom(INIT_INF);
+applyStrategy('Random');
+simulateSpread();
+drawGraph();
+drawBarChart();
+drawLineChart();
+updateTable();
+</script>
+</body>
+</html>
