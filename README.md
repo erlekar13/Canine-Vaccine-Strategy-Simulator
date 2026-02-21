@@ -10,7 +10,7 @@ This project models different vaccination approaches, helping to analyze outcome
 - Supports decision-making for effective disease prevention  
 
 ## Tech Stack
-- **Language:** Python / Java (add whichever you used)  
+- **Language:**  Java 
 - **Tools:** GitHub, Simulation Libraries  
 
 ## How to Use
